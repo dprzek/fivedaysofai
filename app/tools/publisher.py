@@ -1,116 +1,145 @@
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Union
+from pydantic import ValidationError
+
+from app.memory.state_manager import (
+    CuratedItem,
+    CustomerProfile,
+    NewsletterDraft,
+    PublishNewsletterInput,
+    ToolErrorResponse,
+    ToolStatus,
+)
 from app.observability.tracer import tracer
 
 
-def format_personalized_newsletter(
-    customer_profile: Dict[str, Any],
-    curated_items: List[Dict[str, Any]],
+def format_newsletter_markdown(
+    customer_profile: Union[CustomerProfile, Dict[str, Any]],
+    curated_items: Union[List[CuratedItem], List[Dict[str, Any]]],
     output_format: str = "markdown"
-) -> Dict[str, Any]:
-    """Formats curated release notes into an executive-ready personalized customer newsletter.
+) -> Union[NewsletterDraft, ToolErrorResponse]:
+    """Formats curated release notes into an executive newsletter document.
     
     Args:
-        customer_profile: Customer metadata dictionary.
-        curated_items: Ranked and scored release notes items.
-        output_format: Desired format ('markdown' or 'html'). Defaults to 'markdown'.
+        customer_profile: CustomerProfile instance or dictionary.
+        curated_items: List of CuratedItem instances or dictionaries.
+        output_format: Output format ('markdown' or 'html').
         
     Returns:
-        A dictionary containing the title, raw content, summary, and metadata.
+        NewsletterDraft containing title, metadata, item counts, and formatted content string, or ToolErrorResponse.
+        
+    Recovery Guidance:
+        Provide customer_profile with at least 'name', and curated_items with at least one CuratedItem.
     """
-    with tracer.trace_span("format_personalized_newsletter", {"customer": customer_profile.get("name"), "format": output_format}):
-        customer_name = customer_profile.get("name", "Valued Customer")
-        industry = customer_profile.get("industry", "Enterprise")
-        priorities = ", ".join(customer_profile.get("priorities", ["Cloud Innovation"]))
-        current_date = datetime.now(timezone.utc).strftime("%B %d, %Y")
-        
-        high_items = [i for i in curated_items if i.get("relevance_score") == "High"]
-        med_items = [i for i in curated_items if i.get("relevance_score") == "Medium"]
-        
-        title = f"Google Cloud & Gemini Enterprise Digest for {customer_name}"
-        
+    cust_name = getattr(customer_profile, "name", None) or (customer_profile.get("name") if isinstance(customer_profile, dict) else "Customer")
+    with tracer.trace_span("format_newsletter_markdown", {"customer_name": cust_name, "format": output_format}):
+        try:
+            if isinstance(customer_profile, dict):
+                profile = CustomerProfile(**customer_profile)
+            else:
+                profile = customer_profile
+
+            items: List[CuratedItem] = []
+            for c in (curated_items or []):
+                if isinstance(c, dict):
+                    items.append(CuratedItem(**c))
+                else:
+                    items.append(c)
+        except ValidationError as e:
+            tracer.warning("publisher_validation_error", f"Validation error: {str(e)}")
+            return ToolErrorResponse(
+                error_type="VALIDATION_ERROR",
+                error_message=f"Could not format newsletter: {str(e)}",
+                recovery_instructions="Provide valid customer_profile and non-empty curated_items list.",
+                suggested_action="format_newsletter_markdown"
+            )
+
+        if not items:
+            tracer.warning("publisher_empty_curated_items", "No curated items provided to publisher")
+            return ToolErrorResponse(
+                error_type="EMPTY_CURATED_ITEMS",
+                error_message="Cannot generate newsletter without curated items.",
+                recovery_instructions="Call score_and_rank_release_notes first before attempting to format newsletter.",
+                suggested_action="score_and_rank_release_notes"
+            )
+
+        high_items = [i for i in items if i.relevance_score == "High"]
+        med_items = [i for i in items if i.relevance_score == "Medium"]
+        low_items = [i for i in items if i.relevance_score == "Low"]
+
+        date_str = datetime.now(timezone.utc).strftime("%B %d, %Y")
+        title = f"Google Cloud & Gemini Enterprise Executive Update: {profile.name}"
+
         lines = [
             f"# {title}",
-            f"**Prepared for:** {customer_name} ({industry})  ",
-            f"**Focus Areas:** {priorities}  ",
-            f"**Edition:** {current_date}  ",
+            f"**Prepared For:** {profile.name} ({profile.tier})",
+            f"**Industry Vertical:** {profile.industry}",
+            f"**Date:** {date_str} | **Curated By:** Google ADK Autonomous Agent",
             "",
             "---",
             "",
-            "## 📌 Executive Summary",
-            (
-                f"Welcome to your tailored Google Cloud update. This edition filters recent platform announcements "
-                f"specifically for {customer_name}'s architecture and current priorities ({priorities}). "
-                f"We have highlighted **{len(high_items)} critical update(s)** requiring immediate architectural attention "
-                f"and **{len(med_items)} operational enhancement(s)** relevant to your engineering roadmaps."
-            ),
+            "## 🎯 Strategic Summary & Tailored Context",
+            f"This personalized briefing is curated specifically for **{profile.name}** based on your technology ecosystem:",
+            f"- **Active Stack:** {', '.join(profile.tech_stack)}",
+            f"- **Strategic Priorities:** {', '.join(profile.priorities)}",
+            "",
+            f"Out of **{len(items)}** recent platform updates evaluated, **{len(high_items)} critical high-impact announcements** require direct attention.",
             "",
             "---",
-            "",
-            "## 🚀 High-Priority Updates (Direct Strategic Impact)",
             ""
         ]
-        
-        if not high_items:
-            lines.append("_No critical breaking changes or direct-match features in this release cycle._")
+
+        if high_items:
+            lines.append("## 🚨 High-Priority Platform Updates (Immediate Action Required)")
             lines.append("")
-        else:
-            for item in high_items:
-                rn = item["release_note"]
-                status_badge = f"🟢 **{rn.get('status_type', 'GA')}**" if rn.get('status_type') == 'GA' else f"🟡 **{rn.get('status_type', 'Preview')}**"
+            for idx, c in enumerate(high_items, 1):
+                item = c.item
                 lines.extend([
-                    f"### {status_badge} [{rn.get('title')}]({rn.get('url')})",
-                    f"- **Date:** {rn.get('date')}",
-                    f"- **Category:** {rn.get('category')}",
-                    f"- **Summary:** {rn.get('summary')}",
-                    f"- **💡 Why It Matters to {customer_name}:** {item.get('why_it_matters')}",
-                    f"- **🎯 Recommended Next Step:** `{item.get('recommended_action')}`",
+                    f"### {idx}. {item.title} `[{item.category}]` `[{item.status_type}]`",
+                    f"- **Published Date:** {item.published_date}",
+                    f"- **Summary:** {item.summary}",
+                    f"- **🎯 Why It Matters to {profile.name}:** {c.why_it_matters}",
+                    f"- **📋 Recommended Next Action:** {c.recommended_action}",
+                    f"- 🔗 [Official Documentation & Release Notes]({item.url})",
                     ""
                 ])
-                
-        lines.extend([
-            "---",
-            "",
-            "## ⚙️ Relevant Operational & Platform Updates",
-            ""
-        ])
-        
-        if not med_items:
-            lines.append("_No secondary platform updates for this cycle._")
+
+        if med_items:
+            lines.append("## 💡 Medium-Priority Updates (Sprint Planning & Architectural Awareness)")
             lines.append("")
-        else:
-            for item in med_items:
-                rn = item["release_note"]
-                status_badge = f"🟢 **{rn.get('status_type', 'GA')}**" if rn.get('status_type') == 'GA' else f"🟡 **{rn.get('status_type', 'Preview')}**"
+            for idx, c in enumerate(med_items, 1):
+                item = c.item
                 lines.extend([
-                    f"### {status_badge} [{rn.get('title')}]({rn.get('url')})",
-                    f"- **Category:** {rn.get('category')} | **Date:** {rn.get('date')}",
-                    f"- **Impact:** {item.get('why_it_matters')}",
-                    f"- **Action:** {item.get('recommended_action')}",
+                    f"### {idx}. {item.title} `[{item.category}]`",
+                    f"- **Summary:** {item.summary}",
+                    f"- **Architectural Relevance:** {c.why_it_matters}",
+                    f"- **Action:** {c.recommended_action}",
+                    f"- 🔗 [Documentation]({item.url})",
                     ""
                 ])
-                
+
+        if low_items:
+            lines.append("## 📌 General Ecosystem & Platform Notes")
+            lines.append("")
+            for idx, c in enumerate(low_items, 1):
+                item = c.item
+                lines.extend([
+                    f"- **{item.title}** ({item.category}): {item.summary} [Link]({item.url})"
+                ])
+            lines.append("")
+
         lines.extend([
             "---",
-            "",
-            "## 📋 Recommended Action Items for Your Team",
-            f"1. **Architecture Review**: Evaluate high-priority features with your lead engineers.",
-            f"2. **Sandbox Testing**: Test upcoming Preview capabilities in a dedicated dev project.",
-            f"3. **Feedback & Questions**: Contact your Google Cloud Account Team or reply directly to this agent.",
-            "",
-            "> *Generated by the Gemini Enterprise Personalized Newsletter Agent. Grounded on official Google Cloud Release Notes.*"
+            "*Generated with Google Agent Development Kit (ADK), Gemini Enterprise Agent Platform, and OpenTelemetry Distributed Observability.*"
         ])
-        
-        newsletter_md = "\n".join(lines)
-        
-        result = {
-            "title": title,
-            "content": newsletter_md,
-            "high_priority_count": len(high_items),
-            "medium_priority_count": len(med_items),
-            "customer_name": customer_name,
-            "generated_at": current_date,
-            "format": output_format
-        }
-        tracer.info("newsletter_formatted", f"Generated complete newsletter markdown for {customer_name}", length=len(newsletter_md))
-        return result
+
+        full_content = "\n".join(lines)
+        draft = NewsletterDraft(
+            title=title,
+            customer_name=profile.name,
+            content=full_content,
+            high_priority_count=len(high_items),
+            total_items=len(items)
+        )
+        tracer.info("newsletter_published", f"Formatted newsletter draft for {profile.name}", length=len(full_content), high_priority=len(high_items))
+        return draft

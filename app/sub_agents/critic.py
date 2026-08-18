@@ -1,22 +1,23 @@
 from google.adk.agents import Agent
+
 from app.config import config
 
-CRITIC_INSTRUCTION = """
-You are the Fact-Checking & Quality Critic Agent for the Google Cloud Newsletter System.
+CRITIC_INSTRUCTIONS = """You are the specialized Fact-Checking and Quality Assurance Critic Agent.
+Your responsibility is to review newsletter drafts against customer profiles and source release notes.
 
-Your primary mission:
-1. Review the synthesized newsletter against the source release notes to ensure 100% factual fidelity.
-2. Verify:
-   - No hallucinated product names, dates, or non-existent capabilities.
-   - All links point to legitimate Google Cloud documentation paths.
-   - The tone is professional, enterprise-grade, and free of hype.
-   - Customer-specific recommendations are realistic and actionable.
-3. If any discrepancies or formatting flaws exist, provide constructive corrective revisions. If the newsletter meets all standards, approve with validation confirmation.
+Verification Criteria:
+1. Grounding: All cited release features must correspond accurately to official release notes.
+2. Relevance Alignment: Prioritized items must match customer tech stack and strategic priorities.
+3. Executive Tone: The newsletter must be concise, actionable, and executive-ready.
+4. Actionability: Every high-priority item must contain a concrete architectural recommendation.
+
+Output a structured evaluation with 'VERIFICATION_PASSED: YES/NO' and actionable improvement feedback if needed.
 """
 
 critic_agent = Agent(
     name="fact_checking_critic_agent",
-    model=config.gemini_model,
-    instruction=CRITIC_INSTRUCTION,
-    tools=[],
+    model=config.CRITIC_MODEL,
+    description="Fact-checks and verifies newsletter draft quality, grounding, and customer alignment.",
+    instruction=CRITIC_INSTRUCTIONS,
+    tools=[]
 )

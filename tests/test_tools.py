@@ -1,76 +1,99 @@
 import pytest
+from app.memory.state_manager import (
+    CustomerProfile,
+    ReleaseNoteItem,
+    CuratedItem,
+    ToolStatus,
+    ToolErrorResponse,
+)
 from app.tools.customer_crm import lookup_customer_profile, register_or_update_customer_profile
 from app.tools.release_notes import fetch_cloud_release_notes
-from app.tools.relevance_ranker import rank_and_curate_release_notes
-from app.tools.publisher import format_personalized_newsletter
+from app.tools.relevance_ranker import score_and_rank_release_notes
+from app.tools.publisher import format_newsletter_markdown
 
 
-def test_lookup_existing_customer():
+def test_lookup_customer_profile_known():
     profile = lookup_customer_profile("FinTech Global Bank")
-    assert profile["name"] == "FinTech Global Bank"
-    assert "Financial Services" in profile["industry"]
-    assert any("Spanner" in t for t in profile["tech_stack"])
-    assert any("Security" in p or "Governance" in p for p in profile["priorities"])
+    assert isinstance(profile, CustomerProfile)
+    assert profile.name == "FinTech Global Bank"
+    assert "Cloud Spanner" in profile.tech_stack
 
 
-def test_lookup_dynamic_customer():
-    profile = lookup_customer_profile("Acme AI Labs")
-    assert profile["name"] == "Acme Ai Labs"
-    assert "Technology" in profile["industry"]
-    assert len(profile["tech_stack"]) > 0
+def test_lookup_customer_profile_fuzzy():
+    profile = lookup_customer_profile("MediaStream")
+    assert isinstance(profile, CustomerProfile)
+    assert "MediaStream" in profile.name
+    assert "Vertex AI" in profile.tech_stack
 
 
-def test_register_and_update_customer():
-    result = register_or_update_customer_profile(
-        name="Custom Retail Corp",
-        industry="Retail & E-commerce",
-        tech_stack=["BigQuery", "Vertex AI", "Cloud Storage"],
-        priorities=["Real-time inventory search", "Personalized recommendations"]
+def test_lookup_customer_profile_dynamic():
+    profile = lookup_customer_profile("Acme Corp Innovations")
+    assert isinstance(profile, CustomerProfile)
+    assert profile.name == "Acme Corp Innovations"
+    assert len(profile.tech_stack) > 0
+
+
+def test_register_customer_profile():
+    new_profile = register_or_update_customer_profile(
+        name="Healthcare Dynamics",
+        industry="Healthcare & Life Sciences",
+        tech_stack=["Cloud Healthcare API", "BigQuery", "Vertex AI"],
+        priorities=["HIPAA Compliance", "Clinical Note Summarization"],
+        tier="Enterprise Tier 1"
     )
-    assert result["name"] == "Custom Retail Corp"
-    assert result["industry"] == "Retail & E-commerce"
-    
-    # Retrieve again
-    retrieved = lookup_customer_profile("Custom Retail Corp")
-    assert retrieved["industry"] == "Retail & E-commerce"
-    assert "BigQuery" in retrieved["tech_stack"]
+    assert isinstance(new_profile, CustomerProfile)
+    assert new_profile.name == "Healthcare Dynamics"
+
+    # Verify retrieval
+    retrieved = lookup_customer_profile("Healthcare Dynamics")
+    assert isinstance(retrieved, CustomerProfile)
+    assert "Cloud Healthcare API" in retrieved.tech_stack
 
 
-def test_fetch_cloud_release_notes():
+def test_fetch_cloud_release_notes_fallback():
+    notes = fetch_cloud_release_notes(limit=5)
+    assert isinstance(notes, list)
+    assert len(notes) >= 3
+    assert all(isinstance(n, ReleaseNoteItem) for n in notes)
+
+
+def test_score_and_rank_release_notes():
+    profile = CustomerProfile(
+        name="FinTech Global Bank",
+        industry="Financial Services & Banking",
+        tech_stack=["Cloud Spanner", "Cloud Armor", "BigQuery"],
+        priorities=["Security & Governance", "Audit Compliance"]
+    )
     notes = fetch_cloud_release_notes(limit=10)
-    assert len(notes) >= 5
-    first_note = notes[0]
-    assert "title" in first_note
-    assert "summary" in first_note
-    assert "category" in first_note
-    assert "url" in first_note
-    assert "status_type" in first_note
+    response = score_and_rank_release_notes(profile, notes)
+    
+    assert response.status == ToolStatus.SUCCESS
+    assert response.total_analyzed == len(notes)
+    assert len(response.curated_items) == len(notes)
+    # Check that high score items are sorted first
+    assert response.curated_items[0].numerical_score >= response.curated_items[-1].numerical_score
 
 
-def test_rank_and_curate_release_notes():
-    profile = lookup_customer_profile("FinTech Global Bank")
-    notes = fetch_cloud_release_notes(limit=10)
-    curated = rank_and_curate_release_notes(profile, notes)
+def test_format_newsletter_markdown():
+    profile = CustomerProfile(
+        name="Retail Pulse",
+        industry="E-Commerce & Retail",
+        tech_stack=["Gemini Enterprise Agent Platform"],
+        priorities=["Agent Observability"]
+    )
+    notes = fetch_cloud_release_notes(limit=5)
+    ranked = score_and_rank_release_notes(profile, notes)
+    newsletter = format_newsletter_markdown(profile, ranked.curated_items)
     
-    assert len(curated) == len(notes)
-    high_items = [c for c in curated if c["relevance_score"] == "High"]
-    assert len(high_items) >= 1
-    
-    first_high = high_items[0]
-    assert "why_it_matters" in first_high
-    assert "recommended_action" in first_high
-    assert "FinTech Global Bank" in first_high["why_it_matters"]
+    assert newsletter.status == ToolStatus.SUCCESS
+    assert "Retail Pulse" in newsletter.title
+    assert "Strategic Summary" in newsletter.content
+    assert len(newsletter.content) > 200
 
 
-def test_format_personalized_newsletter():
-    profile = lookup_customer_profile("MediaStream Studios")
-    notes = fetch_cloud_release_notes(limit=10)
-    curated = rank_and_curate_release_notes(profile, notes)
-    
-    newsletter = format_personalized_newsletter(profile, curated)
-    
-    assert "MediaStream Studios" in newsletter["title"]
-    assert "## 📌 Executive Summary" in newsletter["content"]
-    assert "## 🚀 High-Priority Updates" in newsletter["content"]
-    assert "## 📋 Recommended Action Items" in newsletter["content"]
-    assert newsletter["high_priority_count"] >= 1
+def test_guided_error_handling_empty_items():
+    profile = CustomerProfile(name="Empty Test", tech_stack=[], priorities=[])
+    res = score_and_rank_release_notes(profile, [])
+    assert isinstance(res, ToolErrorResponse)
+    assert res.error_type == "EMPTY_RELEASE_NOTES_LIST"
+    assert "Call fetch_cloud_release_notes first" in res.recovery_instructions

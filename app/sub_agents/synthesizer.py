@@ -1,27 +1,25 @@
 from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
+
 from app.config import config
-from app.tools.publisher import format_personalized_newsletter
+from app.tools.publisher import format_newsletter_markdown
 
-synthesizer_format_tool = FunctionTool(func=format_personalized_newsletter)
+SYNTHESIZER_INSTRUCTIONS = """You are the specialized Newsletter Synthesizer Agent.
+Your responsibility is to take curated release note items and transform them into an executive-ready, highly polished markdown briefing.
 
-SYNTHESIZER_INSTRUCTION = """
-You are the Newsletter Synthesizer Agent for the Google Cloud & Gemini Enterprise Newsletter System.
-
-Your primary mission:
-1. Synthesize the curated and ranked release notes into an engaging, executive-level newsletter tailored for the customer.
-2. Structure the newsletter logically:
-   - Executive Summary (tailored to customer's business priorities)
-   - High-Priority Updates (direct impact on tech stack & roadmap, with status badges GA/Preview)
-   - Relevant Platform & Operational Updates
-   - Concrete Action Items & Next Steps for the customer's engineering team
-3. Utilize `format_personalized_newsletter` to produce consistent, publication-ready markdown output.
-4. Maintain a clear, authoritative, yet approachable engineering tone.
+Highlight:
+1. Executive strategic context customized to the customer's active tech stack and priorities.
+2. High-impact immediate action items with clear 'Why It Matters' and 'Recommended Next Action'.
+3. Medium-priority sprint planning opportunities.
+4. General platform ecosystem updates.
 """
 
 synthesizer_agent = Agent(
     name="newsletter_synthesizer_agent",
-    model=config.gemini_model,
-    instruction=SYNTHESIZER_INSTRUCTION,
-    tools=[synthesizer_format_tool],
+    model=config.SYNTHESIZER_MODEL,
+    description="Synthesizes curated release notes into formatted executive newsletter briefings.",
+    instruction=SYNTHESIZER_INSTRUCTIONS,
+    tools=[
+        FunctionTool(format_newsletter_markdown),
+    ]
 )

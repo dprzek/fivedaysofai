@@ -1,0 +1,8 @@
+project_id      = "adk-dev-485808"
+region          = "us-central1"
+service_name    = "personalized-cloud-newsletter-agent"
+container_image = "gcr.io/adk-dev-485808/personalized-cloud-newsletter-agent:latest"
+fast_model      = "gemini-2.5-flash"
+reasoning_model = "gemini-1.5-pro"
+min_instances   = 1
+max_instances   = 10
