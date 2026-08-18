@@ -1,0 +1,99 @@
+{
+  "evalset_name": "google_cloud_newsletter_agent_eval_suite",
+  "version": "1.0.0",
+  "description": "Comprehensive multi-turn evaluation benchmark for the Personalized Cloud Newsletter Agent",
+  "eval_cases": [
+    {
+      "id": "eval-001-fintech-happy-path",
+      "name": "Financial Services Customer Newsletter Generation",
+      "turns": [
+        {
+          "role": "user",
+          "content": "Can you generate a release notes digest for FinTech Global Bank?"
+        }
+      ],
+      "expected_tool_trajectory": [
+        "lookup_customer_profile",
+        "fetch_cloud_release_notes",
+        "rank_and_curate_release_notes",
+        "format_personalized_newsletter"
+      ],
+      "rubric_assertions": [
+        {
+          "criterion": "Customer Personalization",
+          "description": "Output explicitly references FinTech Global Bank and aligns with financial services, Spanner, BigQuery, or regulatory compliance.",
+          "required_keywords": ["FinTech Global Bank", "Financial Services", "Why It Matters"]
+        },
+        {
+          "criterion": "Factual Grounding & Structure",
+          "description": "Contains Executive Summary, High-Priority Updates, Operational Updates, and Recommended Action Items.",
+          "required_keywords": ["Executive Summary", "High-Priority Updates", "Recommended Action Items"]
+        }
+      ]
+    },
+    {
+      "id": "eval-002-media-multimodal-path",
+      "name": "Media & Entertainment Streaming Customer Newsletter",
+      "turns": [
+        {
+          "role": "user",
+          "content": "Please create the latest Google Cloud update newsletter for MediaStream Studios."
+        }
+      ],
+      "expected_tool_trajectory": [
+        "lookup_customer_profile",
+        "fetch_cloud_release_notes",
+        "rank_and_curate_release_notes",
+        "format_personalized_newsletter"
+      ],
+      "rubric_assertions": [
+        {
+          "criterion": "Tech Stack Relevance",
+          "description": "Highlights video processing, Claude/Gemini multimodal models, or Cloud Run throughput relevant to streaming.",
+          "required_keywords": ["MediaStream Studios", "Media & Entertainment", "Why It Matters"]
+        }
+      ]
+    },
+    {
+      "id": "eval-003-disambiguation-turn",
+      "name": "Ambiguous Customer Input Disambiguation",
+      "turns": [
+        {
+          "role": "user",
+          "content": "Hey, generate me a cloud newsletter with the newest release notes."
+        }
+      ],
+      "expected_behavior": "Agent politely asks the user to specify which customer or company to tailor the newsletter for before generating.",
+      "rubric_assertions": [
+        {
+          "criterion": "Disambiguation Handling",
+          "description": "Asks the user for the customer name rather than guessing or outputting a generic untargeted newsletter.",
+          "required_keywords": ["customer"]
+        }
+      ]
+    },
+    {
+      "id": "eval-004-dynamic-customer-update",
+      "name": "Dynamic Customer Profile Registration and Generation",
+      "turns": [
+        {
+          "role": "user",
+          "content": "Generate a digest for BioHealth AI. They are in Healthcare, use Vertex AI and Cloud Healthcare API, and prioritize HIPAA compliance."
+        }
+      ],
+      "expected_tool_trajectory": [
+        "lookup_customer_profile",
+        "fetch_cloud_release_notes",
+        "rank_and_curate_release_notes",
+        "format_personalized_newsletter"
+      ],
+      "rubric_assertions": [
+        {
+          "criterion": "Dynamic Profiling & Compliance",
+          "description": "Successfully tailors the digest to Healthcare and HIPAA/compliance priorities.",
+          "required_keywords": ["BioHealth AI", "Executive Summary", "Why It Matters"]
+        }
+      ]
+    }
+  ]
+}

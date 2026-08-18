@@ -1,0 +1,64 @@
+{
+  "evalset": "google_cloud_newsletter_agent_eval_suite",
+  "total_cases": 4,
+  "passed_cases": 4,
+  "pass_rate_percent": 100.0,
+  "results": [
+    {
+      "id": "eval-001-fintech-happy-path",
+      "name": "Financial Services Customer Newsletter Generation",
+      "passed": true,
+      "trajectory_executed": [
+        "lookup_customer_profile",
+        "fetch_cloud_release_notes",
+        "rank_and_curate_release_notes",
+        "format_personalized_newsletter"
+      ],
+      "assertions_passed": [
+        "Customer Personalization (Found: FinTech Global Bank, Financial Services, Why It Matters)",
+        "Factual Grounding & Structure (Found: Executive Summary, High-Priority Updates, Recommended Action Items)"
+      ],
+      "assertions_failed": []
+    },
+    {
+      "id": "eval-002-media-multimodal-path",
+      "name": "Media & Entertainment Streaming Customer Newsletter",
+      "passed": true,
+      "trajectory_executed": [
+        "lookup_customer_profile",
+        "fetch_cloud_release_notes",
+        "rank_and_curate_release_notes",
+        "format_personalized_newsletter"
+      ],
+      "assertions_passed": [
+        "Tech Stack Relevance (Found: MediaStream Studios, Media & Entertainment, Why It Matters)"
+      ],
+      "assertions_failed": []
+    },
+    {
+      "id": "eval-003-disambiguation-turn",
+      "name": "Ambiguous Customer Input Disambiguation",
+      "passed": true,
+      "trajectory_executed": [],
+      "assertions_passed": [
+        "Disambiguation Handling (Found: customer)"
+      ],
+      "assertions_failed": []
+    },
+    {
+      "id": "eval-004-dynamic-customer-update",
+      "name": "Dynamic Customer Profile Registration and Generation",
+      "passed": true,
+      "trajectory_executed": [
+        "lookup_customer_profile",
+        "fetch_cloud_release_notes",
+        "rank_and_curate_release_notes",
+        "format_personalized_newsletter"
+      ],
+      "assertions_passed": [
+        "Dynamic Profiling & Compliance (Found: BioHealth AI, Executive Summary, Why It Matters)"
+      ],
+      "assertions_failed": []
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+steps:
+  # Step 1: Run unit tests
+  - name: 'python:3.11-slim'
+    id: 'test'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        pip install -r requirements.txt
+        pytest tests/
+        python tests/eval/run_eval.py
+
+  # Step 2: Build Docker container image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/cloud-newsletter-agent:$COMMIT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/cloud-newsletter-agent:latest'
+      - '.'
+
+  # Step 3: Push image to Artifact Registry / Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/cloud-newsletter-agent:$COMMIT_SHA'
+
+  # Step 4: Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'cloud-newsletter-agent'
+      - '--image=gcr.io/$PROJECT_ID/cloud-newsletter-agent:$COMMIT_SHA'
+      - '--region=us-central1'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--set-env-vars=GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=global'
+
+images:
+  - 'gcr.io/$PROJECT_ID/cloud-newsletter-agent:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/cloud-newsletter-agent:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
